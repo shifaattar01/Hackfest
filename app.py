@@ -1,777 +1,1724 @@
-
 import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.express as px
-from pathlib import Path
+import joblib
+import os
+import sqlite3
+import hashlib
+import secrets
+from datetime import datetime
+
+
+
+# =========================================================
+# CONFIGURATION
+# =========================================================
 
 st.set_page_config(
-    page_title="EstiMateAi | Estimate Smarter, Build Better",
-    page_icon="📊",
-    layout="wide"
+    page_title="AI Cost Estimator",
+    page_icon="💰",
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
-# ---------------- CUSTOM THEME ----------------
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-html, body, [class*="css"] {
-    font-family: 'Inter', sans-serif;
-}
+# EstiMate AI Logo
+LOGO_PATH = "logo.png"
+
+if os.path.exists(LOGO_PATH):
+    st.logo(
+        LOGO_PATH,
+        size="large"
+    )
+# =========================================================
+# STYLING
+# =========================================================
+
+st.markdown('''
+<style>
+
+/* =========================================================
+   MAIN APP BACKGROUND
+   ========================================================= */
 
 .stApp {
-    background: radial-gradient(circle at 10% 0%,
-        #201044 0, #0a0b18 38%, #05060b 100%);
-    color: #f5f6ff;
+    background: linear-gradient(135deg, #f3e8ff, #e9d5ff);
+    color: #1e1b4b;
 }
 
-.block-container {
-    padding-top: 1.6rem;
-    max-width: 1320px;
+
+/* =========================================================
+   MAIN TEXT
+   ========================================================= */
+
+.stMarkdown,
+p {
+    color: #1e1b4b;
 }
 
-[data-testid="stSidebar"] {
-    background: #0c0d1b;
-    border-right: 1px solid #27213e;
-}
+
+/* =========================================================
+   HEADINGS
+   ========================================================= */
 
 h1, h2, h3 {
-    color: #f8f7ff;
+    color: #4c1d95 !important;
 }
 
-p, label, .stMarkdown {
-    color: #d7d8e8;
-}
 
-.brand {
-    font-size: 2.8rem;
-    font-weight: 800;
-    letter-spacing: -1.5px;
-    color: white;
-}
+/* =========================================================
+   BUTTONS
+   ========================================================= */
 
-.brand span {
-    background: linear-gradient(90deg, #a78bfa, #60a5fa);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.tagline {
-    font-size: 1.1rem;
-    color: #c4c5d8;
-}
-
-.metric-card {
-    background: linear-gradient(
-        145deg,
-        rgba(124,58,237,.18),
-        rgba(37,99,235,.09)
-    );
-    border: 1px solid rgba(167,139,250,.3);
-    border-radius: 16px;
-    padding: 18px;
-    min-height: 120px;
-}
-
-.metric-label {
-    font-size: .82rem;
-    color: #b9bad0;
-    margin-bottom: 9px;
-}
-
-.metric-value {
-    font-size: 1.65rem;
-    font-weight: 800;
-    color: white;
-}
-
-.metric-sub {
-    font-size: .78rem;
-    color: #a78bfa;
-    margin-top: 6px;
-}
-
-div.stButton > button {
-    background: linear-gradient(90deg, #7c3aed, #2563eb);
-    color: white;
-    border: 0;
+.stButton > button {
+    background: linear-gradient(90deg, #9333ea, #7e22ce);
+    color: white !important;
     border-radius: 10px;
-    font-weight: 700;
-    padding: .65rem 1.1rem;
+    font-weight: bold;
+    border: none;
+    padding: 0.6rem 1.2rem;
 }
 
-div.stButton > button:hover {
-    border: 1px solid #a78bfa;
-    color: white;
+.stButton > button:hover {
+    background: linear-gradient(90deg, #7e22ce, #6b21a8);
+    color: white !important;
 }
+
+
+/* =========================================================
+   INPUT LABELS
+   ========================================================= */
+
+label {
+    color: #1e1b4b !important;
+    font-weight: 600;
+}
+
+
+/* =========================================================
+   TEXT INPUTS / NUMBER INPUTS
+   ========================================================= */
+
+div[data-baseweb="input"] input {
+    color: white !important;
+}
+
+div[data-baseweb="input"] {
+    background-color: #272933 !important;
+    border-radius: 10px;
+}
+
+
+/* =========================================================
+   SELECTBOX
+   ========================================================= */
+
+/* Selectbox main box */
+div[data-baseweb="select"] > div {
+    background-color: #272933 !important;
+    color: white !important;
+    border-radius: 10px;
+}
+
+/* Selected value */
+div[data-baseweb="select"] span {
+    color: white !important;
+}
+
+
+/* =========================================================
+   SELECTBOX DROPDOWN MENU
+   ========================================================= */
+
+/* Dropdown container */
+div[data-baseweb="popover"] {
+    background-color: #272933 !important;
+}
+
+/* Dropdown options */
+div[role="option"] {
+    background-color: #272933 !important;
+    color: white !important;
+}
+
+/* Option text */
+div[role="option"] span {
+    color: white !important;
+}
+
+/* Hover option */
+div[role="option"]:hover {
+    background-color: #4c1d95 !important;
+    color: white !important;
+}
+
+div[role="option"]:hover span {
+    color: white !important;
+}
+
+
+/* =========================================================
+   METRIC CARDS
+   ========================================================= */
+
+div[data-testid="stMetric"] {
+    background: rgba(255, 255, 255, 0.88);
+    padding: 20px;
+    border-radius: 14px;
+    border: 1px solid #c084fc;
+}
+
+
+/* Metric labels */
+div[data-testid="stMetric"] label {
+    color: #312e81 !important;
+}
+
+
+/* Metric values */
+div[data-testid="stMetricValue"] {
+    color: #4c1d95 !important;
+    font-weight: 700 !important;
+}
+
+
+/* Metric delta */
+div[data-testid="stMetricDelta"] {
+    color: #4c1d95 !important;
+}
+
+
+/* =========================================================
+   INFO / WARNING / SUCCESS BOXES
+   ========================================================= */
+
+div[data-testid="stAlert"] {
+    border-radius: 12px;
+}
+
+
+/* =========================================================
+   CAPTION / HELP TEXT
+   ========================================================= */
+
+.stCaption {
+    color: #6b5b95 !important;
+}
+
+/* HELP TOOLTIP */
+div[data-testid="stTooltipContent"] {
+    background-color: white !important;
+    color: #1e1b4b !important;
+    border-radius: 8px !important;
+    padding: 10px 12px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+}
+
+div[data-testid="stTooltipContent"] * {
+    color: #1e1b4b !important;
+}
+
+/* Alternative tooltip container used by some Streamlit versions */
+div[data-baseweb="tooltip"] {
+    background-color: white !important;
+    color: #1e1b4b !important;
+}
+
+div[data-baseweb="tooltip"] * {
+    color: #1e1b4b !important;
+}
+
 </style>
-""", unsafe_allow_html=True)
+''', unsafe_allow_html=True)
+# =========================================================
+# SESSION STATE
+# =========================================================
+
+if "page" not in st.session_state:
+    st.session_state.page = "auth"
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if "username" not in st.session_state:
+    st.session_state.username = ""
+
+if "result" not in st.session_state:
+    st.session_state.result = None
 
 
-# ---------------- HELPER FUNCTIONS ----------------
+# =========================================================
+# DATABASE AUTHENTICATION
+# =========================================================
 
-def money(value):
-    return "₹{:,.0f}".format(max(0, value))
+DB_PATH = "users.db"
 
 
-def estimate_project(
-    team_size,
-    experience,
-    complexity,
-    features,
-    months,
-    dev_rate,
-    tester_rate,
-    manager_rate,
-    cloud_monthly,
-    tools_monthly,
-    contingency_pct
-):
-    # Demonstration formula.
-    # This is not a trained machine-learning model.
+def init_database():
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
 
-    complexity_factor = {
-        "Low": 0.8,
-        "Medium": 1.0,
-        "High": 1.35,
-        "Very high": 1.7
-    }[complexity]
 
-    experience_factor = max(
-        0.72, 1.12 - experience * 0.045
+def hash_password(password, salt=None):
+    if salt is None:
+        salt = secrets.token_hex(16)
+    password_hash = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        100_000
+    ).hex()
+    return password_hash, salt
+
+
+def create_user(username, password):
+    password_hash, salt = hash_password(password)
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute(
+            "INSERT INTO users (username, password_hash, salt, created_at) VALUES (?, ?, ?, ?)",
+            (username, password_hash, salt, datetime.now().isoformat(timespec="seconds"))
+        )
+        conn.commit()
+        conn.close()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+
+
+def verify_user(username, password):
+    conn = sqlite3.connect(DB_PATH)
+    row = conn.execute(
+        "SELECT password_hash, salt FROM users WHERE username = ?",
+        (username,)
+    ).fetchone()
+    conn.close()
+
+    if row is None:
+        return False
+
+    stored_hash, salt = row
+    entered_hash, _ = hash_password(password, salt)
+    return secrets.compare_digest(stored_hash, entered_hash)
+
+
+init_database()
+
+
+# =========================================================
+# LOAD DATA AND MODEL
+# =========================================================
+
+DATA_PATH = os.path.join("3.data", "desharnais.csv")
+MODEL_PATH = "model.pkl"
+
+try:
+    df = pd.read_csv(DATA_PATH)
+    model = joblib.load(MODEL_PATH)
+
+except Exception as e:
+
+    st.error("Unable to load the Desharnais dataset or AI model.")
+    st.code(str(e))
+    st.stop()
+
+
+# =========================================================
+# MODEL INFORMATION
+# =========================================================
+
+MODEL_R2 = 0.5919
+MODEL_MAE = 1720.38
+MODEL_RMSE = 2281.77
+MODEL_MMRE = 0.7678
+MODEL_MDMRE = 0.2840
+MODEL_PRED25 = 35.29
+
+MODEL_FEATURES = [
+    "TeamExp",
+    "ManagerExp",
+    "Length",
+    "Transactions",
+    "Entities",
+    "Adjustment",
+    "Language"
+]
+
+
+# =========================================================
+# SIGN IN / SIGN UP
+# =========================================================
+
+def auth_page():
+
+    with st.container(horizontal_alignment="center"):
+        if os.path.exists("logo.png"):
+            st.image("logo.png", width=150)
+
+    st.markdown(
+        "<h1 style='text-align:center; color:#4c1d95;'>"
+        "Project Cost Estimator"
+        "</h1>",
+        unsafe_allow_html=True
     )
 
-    feature_factor = max(0.5, features / 20)
-
-    total_hours = (
-        team_size
-        * months
-        * 140
-        * complexity_factor
-        * experience_factor
-        * feature_factor
+    st.markdown(
+        "<div style='text-align:center; font-size:18px; color:#4c1d95; margin-bottom:25px;'>"
+        "Securely sign in or create an account to continue."
+        "</div>",
+        unsafe_allow_html=True
     )
+    col1, col2, col3 = st.columns([1, 2, 1])
 
-    dev_hours = total_hours * 0.62
-    test_hours = total_hours * 0.25
-    manager_hours = total_hours * 0.13
+    with col2:
+        st.markdown(
+         "<div style=\"background:rgba(255,255,255,0.88); padding:12px 20px; "
+    "border-radius:5px; border:1px solid #c084fc; text-align:center; "
+    "max-width:380px; margin:auto;\">"
+    "<h2 style=\"color:#4c1d95; margin:5px 0;\">Welcome</h2>"
+    "<p style=\"margin:5px 0;\">Sign in to your account or create a new account.</p>"
+    "</div>",
+            unsafe_allow_html=True
+        )
 
-    personnel_cost = (
-        dev_hours * dev_rate
-        + test_hours * tester_rate
-        + manager_hours * manager_rate
-    )
+        st.write("")
 
-    cloud_cost = cloud_monthly * months
-    tool_cost = tools_monthly * months
+        c1, c2 = st.columns(2)
 
-    subtotal = personnel_cost + cloud_cost + tool_cost
-    contingency = subtotal * contingency_pct / 100
-    total_cost = subtotal + contingency
+        with c1:
+            if st.button("🔐 Sign In", use_container_width=True):
+                st.session_state.page = "login"
+                st.rerun()
 
-    return {
-        "development_hours": dev_hours,
-        "testing_hours": test_hours,
-        "management_hours": manager_hours,
-        "total_effort": total_hours,
-        "personnel_cost": personnel_cost,
-        "cloud_cost": cloud_cost,
-        "tool_cost": tool_cost,
-        "contingency": contingency,
-        "total_cost": total_cost,
-        "duration_months": months
-    }
+        with c2:
+            if st.button("📝 Sign Up", use_container_width=True):
+                st.session_state.page = "signup"
+                st.rerun()
 
 
-# ---------------- SIDEBAR ----------------
+def login_page():
 
-with st.sidebar:
-    st.markdown("## 🟣 EstiMateAi")
-    st.caption("Estimate Smarter, Build Better")
+    st.title("🔐 Sign In")
+    st.write("Sign in to access the AI Project Cost Estimator.")
 
-    page = st.radio(
-        "NAVIGATION",
-        [
-            "Overview",
-            "Cost Estimator",
-            "Scenario Planner",
-            "Dataset Explorer",
-            "About"
-        ]
-    )
+    col1, col2, col3 = st.columns([1, 2, 1])
 
-    st.divider()
-    st.caption("Prototype v1.0")
-    st.caption("Purple • Blue • Black")
+    with col2:
+        username = st.text_input(
+            "Username",
+            placeholder="Enter your username",
+            key="login_username"
+        )
+
+        password = st.text_input(
+            "Password",
+            type="password",
+            placeholder="Enter your password",
+            key="login_password"
+        )
+
+        if st.button("🚀 Sign In", use_container_width=True):
+            if not username or not password:
+                st.error("⚠️ Please enter both username and password.")
+            elif not verify_user(username.strip(), password):
+                st.error("❌ Invalid username or password.")
+            else:
+                st.session_state.logged_in = True
+                st.session_state.username = username.strip()
+                st.session_state.page = "input"
+                st.rerun()
+
+        if st.button("📝 Create a new account", use_container_width=True):
+            st.session_state.page = "signup"
+            st.rerun()
+
+        if st.button("⬅️ Back", use_container_width=True):
+            st.session_state.page = "auth"
+            st.rerun()
 
 
-# ---------------- BRAND HEADER ----------------
+def signup_page():
 
-st.markdown("""
-<div style="padding: 1rem 0">
-    <div style="
-        color:#a78bfa;
-        text-transform:uppercase;
-        letter-spacing:2px;
-        font-size:.78rem;
-        font-weight:800;">
-        AI-ASSISTED PROJECT PLANNING
-    </div>
-    <div class="brand">EstiMate<span>Ai</span></div>
-    <div class="tagline">Estimate Smarter, Build Better.</div>
-</div>
-""", unsafe_allow_html=True)
+    st.title("📝 Create Account")
+    st.write("Create a secure account to use the AI Project Cost Estimator.")
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col2:
+        username = st.text_input(
+            "Choose a Username",
+            placeholder="Enter a username",
+            key="signup_username"
+        )
+
+        password = st.text_input(
+            "Create Password",
+            type="password",
+            placeholder="Enter a password",
+            key="signup_password"
+        )
+
+        confirm_password = st.text_input(
+            "Confirm Password",
+            type="password",
+            placeholder="Re-enter your password",
+            key="signup_confirm_password"
+        )
+
+        if st.button("✅ Create Account", use_container_width=True):
+            username = username.strip()
+
+            if not username or not password or not confirm_password:
+                st.error("⚠️ Please fill in all fields.")
+            elif len(username) < 3:
+                st.error("⚠️ Username must contain at least 3 characters.")
+            elif len(password) < 8:
+                st.error("⚠️ Password must contain at least 8 characters.")
+            elif password != confirm_password:
+                st.error("❌ Passwords do not match.")
+            elif not create_user(username, password):
+                st.error("❌ Username already exists. Please choose another.")
+            else:
+                st.success("🎉 Account created successfully! Please sign in.")
+                st.session_state.page = "login"
+                st.rerun()
+
+        if st.button("🔐 Already have an account? Sign In", use_container_width=True):
+            st.session_state.page = "login"
+            st.rerun()
+
+        if st.button("⬅️ Back", use_container_width=True):
+            st.session_state.page = "auth"
+            st.rerun()
 
 
-# ==================================================
-# OVERVIEW
-# ==================================================
+# =========================================================
+# HEADER
+# =========================================================
 
-if page == "Overview":
+def show_header():
 
-    st.markdown("### Plan with clarity. Build with confidence.")
+    col1, col2 = st.columns([5, 1])
+
+    with col1:
+
+        st.markdown(
+            "### 💰 AI Cost Estimator"
+        )
+
+        st.caption(
+            f"Welcome, {st.session_state.username} "
+        )
+
+    with col2:
+
+        if st.button("🔓 Logout"):
+
+            st.session_state.logged_in = False
+            st.session_state.username = ""
+            st.session_state.result = None
+            st.session_state.page = "auth"
+
+            st.rerun()
+
+    st.markdown("---")
+
+
+# =========================================================
+# INPUT PAGE
+# =========================================================
+
+def input_page():
+
+    show_header()
+
+    st.title("Enter Your Project Details")
 
     st.write(
-        "Estimate software project effort and budget "
-        "using project scope, team details and resource costs."
+        "Provide basic information about your software project. "
+        "Our machine-learning model will estimate the required "
+        "development effort, project cost and duration."
     )
+
+    st.markdown("---")
+
+
+    # =====================================================
+    # TEAM INFORMATION
+    # =====================================================
+
+    st.subheader("👥 Team Information")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        team_exp = st.number_input(
+            "How experienced is your development team?",
+            min_value=0,
+            max_value=10,
+            value=None,
+            placeholder="Example: 3",
+            help=(
+                "Enter the team's experience level. "
+                "The model uses the historical TeamExp scale."
+            )
+        )
+
+        st.caption(
+            "0 = Very little experience • 10 = Highly experienced"
+        )
+
+    with col2:
+
+        manager_exp = st.number_input(
+            "How experienced is your project manager?",
+            min_value=0,
+            max_value=10,
+            value=None,
+            placeholder="Example: 4",
+            help=(
+                "Enter the project manager's experience level."
+            )
+        )
+
+        st.caption(
+            "0 = Beginner • 10 = Highly experienced"
+        )
+
+
+    # =====================================================
+    # PROJECT SIZE
+    # =====================================================
+
+    st.subheader("📐 Project Size & Complexity")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        duration = st.number_input(
+            "What is the planned development duration?",
+            min_value=1,
+            max_value=60,
+            value=None,
+            placeholder="Example: 12",
+            help=(
+                "Enter the planned project length in months."
+            )
+        )
+
+        st.caption(
+            "Example: 12 means approximately 12 months."
+        )
+
+    with col2:
+
+        transactions = st.number_input(
+            "Approximately how many system transactions are expected?",
+            min_value=1,
+            max_value=1000,
+            value=None,
+            placeholder="Example: 200",
+            help=(
+                "Transactions represent system operations such as "
+                "login, payment, search, registration or booking."
+            )
+        )
+
+        st.caption(
+            "Examples: login, payment, search, registration, booking..."
+        )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        entities = st.number_input(
+            "Approximately how many data entities are involved?",
+            min_value=1,
+            max_value=500,
+            value=None,
+            placeholder="Example: 100",
+            help=(
+                "Entities represent important data objects such as "
+                "User, Product, Order, Payment or Employee."
+            )
+        )
+
+        st.caption(
+            "Examples: User, Product, Order, Payment..."
+        )
+
+    with col2:
+
+        adjustment = st.number_input(
+            "What is the project adjustment factor?",
+            min_value=1,
+            max_value=100,
+            value=None,
+            placeholder="Example: 30",
+            help=(
+                "Adjustment factor from the historical dataset."
+            )
+        )
+
+        st.caption(
+            "Use a value from 1 to 100 based on your project assessment."
+        )
+
+
+    # =====================================================
+    # TECHNOLOGY & COST
+    # =====================================================
+
+    st.subheader("💻 Technology & Cost")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        language = st.selectbox(
+            "Select the language category",
+            [None, 1, 2, 3],
+            format_func=lambda x:
+                "Select a category"
+                if x is None
+                else f"Category {x}",
+            help=(
+                "The Desharnais dataset represents programming "
+                "language as encoded categories."
+            )
+        )
+
+        st.caption(
+            "The model uses language categories 1–3."
+        )
+
+    with col2:
+
+        hourly_rate = st.number_input(
+            "What is the estimated developer cost per hour?",
+            min_value=100,
+            max_value=5000,
+            value=None,
+            placeholder="Example: 500",
+            help=(
+                "Enter the approximate cost of one developer "
+                "working for one hour."
+            )
+        )
+
+        st.caption(
+            "Example: ₹500 means approximately ₹500/hour."
+        )
+
+
+    st.markdown("---")
+
+
+    # =====================================================
+    # DATASET INFORMATION
+    # =====================================================
+
+    st.info(
+        "**Model Dataset:** The estimator is trained using "
+        "the Desharnais software effort estimation dataset "
+        "containing 81 historical software projects."
+    )
+
+
+    # =====================================================
+    # HOW IT WORKS
+    # =====================================================
+
+    st.info(
+        "**How this works:** Your project information is "
+        "processed by a Random Forest machine-learning model "
+        "trained on historical software project data. "
+        "The model predicts the required development effort."
+    )
+
+
+    # =====================================================
+    # ESTIMATE BUTTON
+    # =====================================================
+
+    if st.button(
+        "Generate AI Estimate",
+        use_container_width=True
+    ):
+
+        values = [
+            team_exp,
+            manager_exp,
+            duration,
+            transactions,
+            entities,
+            adjustment,
+            language,
+            hourly_rate
+        ]
+
+        if any(value is None for value in values):
+
+            st.error(
+                "⚠️ Please complete all project details "
+                "before generating the estimate."
+            )
+
+        else:
+
+            # -------------------------------------------------
+            # CREATE DATAFRAME WITH EXACT MODEL FEATURE NAMES
+            # -------------------------------------------------
+
+            input_data = pd.DataFrame([{
+                "TeamExp": team_exp,
+                "ManagerExp": manager_exp,
+                "Length": duration,
+                "Transactions": transactions,
+                "Entities": entities,
+                "Adjustment": adjustment,
+                "Language": language
+            }])
+
+
+            # -------------------------------------------------
+            # AI PREDICTION
+            # -------------------------------------------------
+
+            predicted_hours = float(
+                model.predict(input_data)[0]
+            )
+
+            # Prevent negative prediction
+            predicted_hours = max(
+                0,
+                predicted_hours
+            )
+
+
+            # -------------------------------------------------
+            # COST
+            # -------------------------------------------------
+
+            estimated_cost = (
+                predicted_hours * hourly_rate
+            )
+
+
+            # -------------------------------------------------
+            # ESTIMATED DURATION
+            # -------------------------------------------------
+
+            # Approximation based on 160 working hours per developer per month
+            HOURS_PER_PERSON_PER_MONTH = 160
+
+            estimated_months = predicted_hours / (
+                team_exp * HOURS_PER_PERSON_PER_MONTH
+            )
+
+            # -------------------------------------------------
+            # HEURISTIC UNCERTAINTY
+            # -------------------------------------------------
+
+            uncertainty = (
+                predicted_hours * 0.15
+            )
+
+
+            # -------------------------------------------------
+            # SAVE RESULT
+            # -------------------------------------------------
+
+            st.session_state.result = {
+
+                "hours": predicted_hours,
+
+                "cost": estimated_cost,
+
+                "months": estimated_months,
+
+                "uncertainty": uncertainty,
+
+                "transactions": transactions,
+
+                "team_exp": team_exp,
+
+                "manager_exp": manager_exp,
+
+                "duration_input": duration,
+
+                "entities": entities,
+
+                "adjustment": adjustment,
+
+                "language": language,
+
+                "hourly_rate": hourly_rate,
+
+                "username": st.session_state.username,
+
+                "date": datetime.now().strftime(
+                    "%d-%m-%Y %H:%M"
+                )
+            }
+
+
+            st.session_state.page = "result"
+
+            st.rerun()
+
+
+# =========================================================
+# RESULT PAGE
+# =========================================================
+
+def result_page():
+
+    show_header()
+
+    st.title("📈 AI Estimation Results")
+
+    res = st.session_state.result
+
+    if res is None:
+
+        st.warning(
+            "No estimation available. "
+            "Please enter project details first."
+        )
+
+        if st.button("⬅️ Go to Input"):
+
+            st.session_state.page = "input"
+
+            st.rerun()
+
+        return
+
+
+    # =====================================================
+    # MAIN RESULTS
+    # =====================================================
 
     c1, c2, c3 = st.columns(3)
 
-    cards = [
-        (c1, "PERSONNEL", "Role-based",
-         "Development, testing and management"),
-        (c2, "RESOURCES", "Included",
-         "Cloud, tools and contingency"),
-        (c3, "PLANNING", "Compare",
-         "Explore different project scenarios")
-    ]
+    c1.metric(
+        "🤖 Estimated Effort",
+        f"{res['hours']:,.0f} hrs"
+    )
 
-    for col, label, value, sub in cards:
-        with col:
-            st.markdown(f"""
-            <div class="metric-card">
-                <div class="metric-label">{label}</div>
-                <div class="metric-value">{value}</div>
-                <div class="metric-sub">{sub}</div>
-            </div>
-            """, unsafe_allow_html=True)
+    c2.metric(
+        "💰 Estimated Cost",
+        f"₹{res['cost']:,.0f}"
+    )
 
-    st.write("")
+    c3.metric(
+        "📅 Estimated Duration",
+        f"{res['months']:.1f} months"
+    )
 
-    left, right = st.columns(2)
 
-    with left:
-        st.markdown("#### What EstiMateAi helps you do")
-        st.markdown("""
-        - Estimate software project costs.
-        - Calculate personnel expenses.
-        - Include cloud and tooling costs.
-        - Compare alternative team sizes.
-        - Explore historical project datasets.
-        """)
+    st.markdown("---")
 
-    with right:
-        st.markdown("#### How it works")
-        st.markdown("""
-        **01 — Describe:** Enter project details.
 
-        **02 — Estimate:** Calculate effort and costs.
+    # =====================================================
+    # ESTIMATED EFFORT RANGE
+    # =====================================================
 
-        **03 — Compare:** Review different scenarios.
+    st.subheader("📊 Estimated Effort Range")
 
-        **04 — Improve:** Connect a trained ML model.
-        """)
+    lower = max(
+        0,
+        res["hours"] - res["uncertainty"]
+    )
+
+    upper = (
+        res["hours"] + res["uncertainty"]
+    )
 
     st.info(
-        "This prototype uses a demonstration formula. "
-        "Its estimates are not trained-AI predictions."
+        f"Estimated effort range: "
+        f"**{lower:,.0f} – {upper:,.0f} hours**"
+    )
+
+    st.caption(
+        "This is a heuristic uncertainty range and is not "
+        "a statistically calibrated confidence interval."
     )
 
 
-# ==================================================
-# COST ESTIMATOR
-# ==================================================
+    # =====================================================
+    # AI EXPLANATION
+    # =====================================================
 
-elif page == "Cost Estimator":
+    st.subheader("AI Explanation")
 
-    st.markdown("### Project cost estimator")
+    if res["transactions"] > 250:
 
-    st.write(
-        "Enter your project details and adjust the resource "
-        "rates to match your assumptions."
+        st.write(
+            "• The project has a relatively high number of "
+            "transactions, which can increase functional complexity "
+            "and development effort."
+        )
+
+    else:
+
+        st.write(
+            "• The transaction volume is within a moderate range, "
+            "which may help keep functional complexity manageable."
+        )
+
+
+    if res["entities"] > 150:
+
+        st.write(
+            "• The project contains a high number of data entities, "
+            "which can require additional development and "
+            "data-management effort."
+        )
+
+    else:
+
+        st.write(
+            "• The number of data entities is within a moderate range."
+        )
+
+
+    if res["duration_input"] >= 12:
+
+        st.write(
+            "• The planned project duration is relatively long, "
+            "indicating a potentially larger development scope."
+        )
+
+    else:
+
+        st.write(
+            "• The planned project duration is relatively short, "
+            "indicating a more compact development schedule."
+        )
+
+
+    if res["adjustment"] >= 30:
+
+        st.write(
+            "• The adjustment factor is relatively high, indicating "
+            "greater project or environmental complexity."
+        )
+
+    else:
+
+        st.write(
+            "• The adjustment factor is comparatively lower, "
+            "indicating less environmental complexity."
+        )
+
+
+    if res["team_exp"] >= 4:
+
+        st.write(
+            "• Higher team experience can improve productivity "
+            "and development efficiency."
+        )
+
+    else:
+
+        st.write(
+            "• Lower team experience may require additional "
+            "learning and development time."
+        )
+
+
+    if res["manager_exp"] >= 4:
+
+        st.write(
+            "• Strong manager experience can support planning, "
+            "coordination and project execution."
+        )
+
+    else:
+
+        st.write(
+            "• Lower manager experience makes effective planning "
+            "and coordination particularly important."
+        )
+
+
+    st.success(
+        f"The AI model estimates approximately "
+        f"**{res['hours']:,.0f} hours** of development effort."
     )
 
-    with st.form("estimate_form"):
 
-        a, b, c = st.columns(3)
+    # =====================================================
+    # MODEL PERFORMANCE
+    # =====================================================
 
-        with a:
-            project_name = st.text_input(
-                "Project name", "Mobile App Project"
-            )
+    st.markdown("---")
 
-            team_size = st.slider(
-                "Team size", 1, 30, 5
-            )
+    st.subheader("Model Performance")
 
-            experience = st.slider(
-                "Average experience (years)", 0, 15, 3
-            )
+    m1, m2, m3 = st.columns(3)
 
-        with b:
-            complexity = st.selectbox(
-                "Project complexity",
-                ["Low", "Medium", "High", "Very high"],
-                index=2
-            )
+    m1.metric(
+        "R² Score",
+        "0.592"
+    )
 
-            features = st.slider(
-                "Features / modules", 1, 100, 20
-            )
+    m2.metric(
+        "MAE",
+        "1,720 hrs"
+    )
 
-            months = st.slider(
-                "Expected duration (months)", 1, 36, 6
-            )
+    m3.metric(
+        "PRED(25)",
+        "35.29%"
+    )
 
-        with c:
-            dev_rate = st.number_input(
-                "Developer cost (₹ / hour)",
-                min_value=100, max_value=5000,
-                value=600, step=50
-            )
 
-            tester_rate = st.number_input(
-                "Tester cost (₹ / hour)",
-                min_value=100, max_value=4000,
-                value=400, step=50
-            )
+    m4, m5, m6 = st.columns(3)
 
-            manager_rate = st.number_input(
-                "Manager cost (₹ / hour)",
-                min_value=100, max_value=6000,
-                value=800, step=50
-            )
+    m4.metric(
+        "RMSE",
+        "2,282 hrs"
+    )
 
-            cloud_monthly = st.number_input(
-                "Cloud / infrastructure (₹ / month)",
-                min_value=0, max_value=10000000,
-                value=12000, step=1000
-            )
+    m5.metric(
+        "MMRE",
+        "0.768"
+    )
 
-            tools_monthly = st.number_input(
-                "Tools / licenses (₹ / month)",
-                min_value=0, max_value=10000000,
-                value=5000, step=500
-            )
+    m6.metric(
+        "MdMRE",
+        "0.284"
+    )
 
-        contingency_pct = st.slider(
-            "Contingency buffer (%)", 0, 30, 10
-        )
+    st.caption(
+        "Evaluation metrics are based on a 20% held-out test "
+        "set from the 81-project Desharnais dataset."
+    )
 
-        submitted = st.form_submit_button(
-            "Estimate project cost",
-            use_container_width=True
-        )
 
-    if submitted:
+    # =====================================================
+    # MODEL FEATURE IMPORTANCE
+    # =====================================================
 
-        result = estimate_project(
-            team_size,
-            experience,
-            complexity,
-            features,
-            months,
-            dev_rate,
-            tester_rate,
-            manager_rate,
-            cloud_monthly,
-            tools_monthly,
-            contingency_pct
-        )
+    st.markdown("---")
 
-        st.session_state["last_result"] = result
-        st.session_state["last_project"] = project_name
+    st.subheader("What Influences the Prediction?")
 
-        st.session_state["last_inputs"] = {
-            "Project": project_name,
-            "Team size": team_size,
-            "Experience (years)": experience,
-            "Complexity": complexity,
-            "Features": features,
-            "Duration (months)": months
-        }
-
-    if "last_result" in st.session_state:
-
-        r = st.session_state["last_result"]
-
-        st.divider()
-
-        st.markdown(
-            f"### Estimate for "
-            f"{st.session_state.get('last_project', 'Your project')}"
-        )
-
-        k1, k2, k3, k4 = st.columns(4)
-
-        metrics = [
-            (k1, "TOTAL ESTIMATED COST",
-             money(r["total_cost"]), "Includes contingency"),
-            (k2, "TOTAL EFFORT",
-             f'{r["total_effort"]:,.0f} hrs', "Estimated person-hours"),
-            (k3, "DURATION",
-             f'{r["duration_months"]} months', "Entered duration"),
-            (k4, "CONTINGENCY",
-             money(r["contingency"]), "Risk buffer")
+    importance_data = pd.DataFrame({
+        "Feature": [
+            "Project Length",
+            "Transactions",
+            "Entities",
+            "Adjustment",
+            "Manager Experience",
+            "Language",
+            "Team Experience"
+        ],
+        "Importance": [
+            0.406215,
+            0.221348,
+            0.170284,
+            0.126275,
+            0.032238,
+            0.024562,
+            0.019078
         ]
+    })
 
-        for col, label, value, sub in metrics:
-            with col:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-label">{label}</div>
-                    <div class="metric-value">{value}</div>
-                    <div class="metric-sub">{sub}</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-        breakdown = pd.DataFrame({
-            "Cost component": [
-                "Personnel",
-                "Cloud / infrastructure",
-                "Tools / licenses",
-                "Contingency"
-            ],
-            "Estimated cost": [
-                r["personnel_cost"],
-                r["cloud_cost"],
-                r["tool_cost"],
-                r["contingency"]
-            ]
-        })
-
-        ch1, ch2 = st.columns(2)
-
-        with ch1:
-            st.markdown("#### Cost breakdown")
-            display_breakdown = breakdown.copy()
-            display_breakdown["Estimated cost"] = (
-                display_breakdown["Estimated cost"].map(money)
-            )
-            st.dataframe(
-                display_breakdown,
-                use_container_width=True,
-                hide_index=True
-            )
-
-        with ch2:
-            fig = px.pie(
-                breakdown,
-                names="Cost component",
-                values="Estimated cost",
-                hole=0.58,
-                color_discrete_sequence=[
-                    "#8b5cf6", "#3b82f6",
-                    "#a78bfa", "#64748b"
-                ]
-            )
-
-            fig.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font_color="#e8e7f4"
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
-
-        st.markdown("#### Effort by role")
-
-        hours = pd.DataFrame({
-            "Role": ["Development", "Testing", "Management"],
-            "Estimated hours": [
-                r["development_hours"],
-                r["testing_hours"],
-                r["management_hours"]
-            ]
-        })
-
-        st.dataframe(
-            hours.style.format({"Estimated hours": "{:,.0f}"}),
-            use_container_width=True,
-            hide_index=True
-        )
-
-        export = pd.DataFrame([{
-            **st.session_state["last_inputs"],
-            "Development hours": round(r["development_hours"]),
-            "Testing hours": round(r["testing_hours"]),
-            "Management hours": round(r["management_hours"]),
-            "Personnel cost": round(r["personnel_cost"]),
-            "Cloud cost": round(r["cloud_cost"]),
-            "Tool/license cost": round(r["tool_cost"]),
-            "Contingency": round(r["contingency"]),
-            "Total estimated cost": round(r["total_cost"])
-        }])
-
-        st.download_button(
-            "Download estimate as CSV",
-            export.to_csv(index=False).encode("utf-8"),
-            file_name="estimateai_project_estimate.csv",
-            mime="text/csv"
-        )
-
-
-# ==================================================
-# SCENARIO PLANNER
-# ==================================================
-
-elif page == "Scenario Planner":
-
-    st.markdown("### Scenario planner")
-
-    st.write(
-        "Compare different team sizes while keeping other "
-        "project assumptions consistent."
+    st.bar_chart(
+        importance_data.set_index("Feature")
     )
 
-    x1, x2, x3 = st.columns(3)
+    st.caption(
+        "Feature importance comes from the Random Forest model "
+        "trained on the Desharnais dataset."
+    )
 
-    with x1:
-        complexity = st.selectbox(
-            "Complexity",
-            ["Low", "Medium", "High", "Very high"],
-            index=2,
-            key="sc_complexity"
+
+    # =====================================================
+    # NAVIGATION
+    # =====================================================
+
+    st.markdown("---")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+
+        if st.button(
+            "📊 View Graphs",
+            use_container_width=True
+        ):
+
+            st.session_state.page = "graphs"
+
+            st.rerun()
+
+
+    with col2:
+
+        if st.button(
+            "📄 View Report",
+            use_container_width=True
+        ):
+
+            st.session_state.page = "report"
+
+            st.rerun()
+
+
+    with col3:
+
+        if st.button(
+            "⬅️ Modify Inputs",
+            use_container_width=True
+        ):
+
+            st.session_state.page = "input"
+
+            st.rerun()
+
+
+# =========================================================
+# GRAPH PAGE
+# =========================================================
+
+def graph_page():
+
+    show_header()
+
+    st.title("Project Data Insights")
+
+    res = st.session_state.result
+
+
+    # =====================================================
+    # HISTORICAL EFFORT
+    # =====================================================
+
+    st.subheader("Historical Effort Distribution")
+
+    st.bar_chart(
+        df["Effort"]
+    )
+
+
+    # =====================================================
+    # HISTORICAL PROJECT LENGTH
+    # =====================================================
+
+    st.subheader("Historical Project Length")
+
+    st.line_chart(
+        df["Length"]
+    )
+
+
+    # =====================================================
+    # TRANSACTIONS
+    # =====================================================
+
+    st.subheader("Historical Transactions")
+
+    st.bar_chart(
+        df["Transactions"]
+    )
+
+
+    # =====================================================
+    # ENTITIES
+    # =====================================================
+
+    st.subheader("Historical Entities")
+
+    st.bar_chart(
+        df["Entities"]
+    )
+
+
+    # =====================================================
+    # YOUR PROJECT VS HISTORICAL DATA
+    # =====================================================
+
+    st.subheader("Your Project vs Historical Data")
+
+    average_effort = df["Effort"].mean()
+
+    average_duration = df["Length"].mean()
+
+    average_transactions = df["Transactions"].mean()
+
+    average_entities = df["Entities"].mean()
+
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+
+        st.metric(
+            "Your Predicted Effort",
+            f"{res['hours']:,.0f} hrs"
         )
 
-        experience = st.slider(
-            "Average experience (years)",
-            0, 15, 3, key="sc_experience"
+        st.metric(
+            "Historical Average Effort",
+            f"{average_effort:,.0f} hrs"
         )
 
-    with x2:
-        features = st.slider(
-            "Features / modules",
-            1, 100, 20, key="sc_features"
+
+    with c2:
+
+        st.metric(
+            "Your Estimated Duration",
+            f"{res['months']:.1f} months"
         )
 
-        months = st.slider(
-            "Duration (months)",
-            1, 36, 6, key="sc_months"
+        st.metric(
+            "Historical Average Length",
+            f"{average_duration:.1f} months"
         )
 
-    with x3:
-        cloud = st.number_input(
-            "Cloud cost / month (₹)",
-            min_value=0, value=12000, step=1000,
-            key="sc_cloud"
-        )
 
-        tools = st.number_input(
-            "Tools / licenses / month (₹)",
-            min_value=0, value=5000, step=500,
-            key="sc_tools"
-        )
+    st.markdown("---")
 
-    rows = []
 
-    for team in [3, 5, 7, 10]:
+    # =====================================================
+    # PROJECT COMPARISON
+    # =====================================================
 
-        r = estimate_project(
-            team, experience, complexity, features, months,
-            600, 400, 800, cloud, tools, 10
-        )
+    comparison = pd.DataFrame({
+        "Metric": [
+            "Transactions",
+            "Entities",
+            "Project Length"
+        ],
 
-        rows.append({
-            "Team size": team,
-            "Estimated effort (hours)": round(r["total_effort"]),
-            "Personnel cost (₹)": round(r["personnel_cost"]),
-            "Total cost (₹)": round(r["total_cost"])
-        })
+        "Your Project": [
+            res["transactions"],
+            res["entities"],
+            res["duration_input"]
+        ],
 
-    df = pd.DataFrame(rows)
+        "Historical Average": [
+            average_transactions,
+            average_entities,
+            average_duration
+        ]
+    })
 
     st.dataframe(
-        df.style.format({
-            "Personnel cost (₹)": "₹{:,.0f}",
-            "Total cost (₹)": "₹{:,.0f}",
-            "Estimated effort (hours)": "{:,.0f}"
-        }),
+        comparison,
         use_container_width=True,
         hide_index=True
     )
 
-    fig = px.bar(
-        df,
-        x="Team size",
-        y="Total cost (₹)",
-        color="Team size",
-        title="Estimated cost by team size",
-        color_discrete_sequence=[
-            "#8b5cf6", "#6366f1", "#3b82f6", "#60a5fa"
-        ]
-    )
 
-    fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font_color="#e8e7f4"
-    )
+    # =====================================================
+    # BACK
+    # =====================================================
 
-    st.plotly_chart(fig, use_container_width=True)
+    if st.button(
+        "⬅️ Back to Results",
+        use_container_width=True
+    ):
 
-    st.caption(
-        "Illustrative scenario comparison. Duration is held constant."
-    )
+        st.session_state.page = "result"
+
+        st.rerun()
 
 
-# ==================================================
-# DATASET EXPLORER
-# ==================================================
+# =========================================================
+# REPORT PAGE
+# =========================================================
 
-elif page == "Dataset Explorer":
+def report_page():
 
-    st.markdown("### Historical dataset explorer")
+    show_header()
+
+    st.title("📄 Project Estimation Report")
+
+    res = st.session_state.result
+
+    if res is None:
+
+        st.warning(
+            "No report is available yet."
+        )
+
+        return
+
+
+    # =====================================================
+    # REPORT HEADER
+    # =====================================================
+
+    st.subheader("Project Summary")
 
     st.write(
-        "Upload a CSV file to inspect historical project data."
+        f"**Generated for:** {res['username']}"
     )
 
-    uploaded = st.file_uploader(
-        "Upload project dataset",
-        type=["csv"]
+    st.write(
+        f"**Generated on:** {res['date']}"
     )
 
-    if uploaded is not None:
+    st.write(
+        "**Model:** Random Forest Regressor"
+    )
 
-        try:
-            data = pd.read_csv(uploaded)
+    st.write(
+        "**Dataset:** Desharnais Software Effort Dataset"
+    )
 
-            st.success(
-                f"Loaded {len(data):,} rows and "
-                f"{len(data.columns)} columns."
-            )
+    st.write(
+        "**Historical Projects:** 81"
+    )
 
-            st.dataframe(
-                data.head(100),
-                use_container_width=True
-            )
 
-            numeric = data.select_dtypes(include=np.number)
+    st.markdown("---")
 
-            if not numeric.empty:
 
-                st.markdown("#### Numeric summary")
+    # =====================================================
+    # PROJECT INPUTS
+    # =====================================================
 
-                st.dataframe(
-                    numeric.describe().T,
-                    use_container_width=True
-                )
+    st.subheader("Project Inputs")
 
-                target = st.selectbox(
-                    "Choose a numeric field to visualize",
-                    numeric.columns.tolist()
-                )
+    input_table = pd.DataFrame({
 
-                fig = px.histogram(
-                    data,
-                    x=target,
-                    nbins=25,
-                    title=f"Distribution of {target}",
-                    color_discrete_sequence=["#8b5cf6"]
-                )
+        "Parameter": [
+            "Team Experience",
+            "Manager Experience",
+            "Planned Duration",
+            "Transactions",
+            "Entities",
+            "Adjustment Factor",
+            "Language Category",
+            "Hourly Rate"
+        ],
 
-                fig.update_layout(
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    font_color="#e8e7f4"
-                )
+        "Value": [
+            res["team_exp"],
+            res["manager_exp"],
+            f"{res['duration_input']} months",
+            res["transactions"],
+            res["entities"],
+            res["adjustment"],
+            f"Category {res['language']}",
+            f"₹{res['hourly_rate']}"
+        ]
+    })
 
-                st.plotly_chart(fig, use_container_width=True)
+    st.table(input_table)
 
-            st.download_button(
-                "Download uploaded CSV",
-                data.to_csv(index=False).encode("utf-8"),
-                file_name="dataset_copy.csv",
-                mime="text/csv"
-            )
 
-        except Exception as e:
-            st.error(f"Could not read this CSV: {e}")
+    # =====================================================
+    # ESTIMATION
+    # =====================================================
+
+    st.subheader("AI Estimation")
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "Effort",
+        f"{res['hours']:,.0f} hrs"
+    )
+
+    c2.metric(
+        "Cost",
+        f"₹{res['cost']:,.0f}"
+    )
+
+    c3.metric(
+        "Duration",
+        f"{res['months']:.1f} months"
+    )
+
+
+    # =====================================================
+    # AI SUMMARY
+    # =====================================================
+
+    st.subheader("AI Summary")
+
+    st.write(
+        f"The machine-learning model predicts approximately "
+        f"**{res['hours']:,.0f} hours** of development effort."
+    )
+
+    st.write(
+        f"Based on the selected hourly rate of "
+        f"**₹{res['hourly_rate']}**, the estimated project cost "
+        f"is approximately **₹{res['cost']:,.0f}**."
+    )
+
+    st.write(
+        f"The estimated development duration is approximately "
+        f"**{res['months']:.1f} months**."
+    )
+
+
+    # =====================================================
+    # MODEL PERFORMANCE
+    # =====================================================
+
+    st.subheader("Model Performance")
+
+    performance_table = pd.DataFrame({
+
+        "Metric": [
+            "R² Score",
+            "MAE",
+            "RMSE",
+            "MMRE",
+            "MdMRE",
+            "PRED(25)"
+        ],
+
+        "Value": [
+            "0.5919",
+            "1720.38 hours",
+            "2281.77 hours",
+            "0.7678",
+            "0.2840",
+            "35.29%"
+        ]
+    })
+
+    st.table(performance_table)
+
+
+    # =====================================================
+    # TEXT REPORT
+    # =====================================================
+
+    report_text = f"""
+AI COST ESTIMATION REPORT
+=========================
+
+Generated For:
+{res['username']}
+
+Generated On:
+{res['date']}
+
+MODEL INFORMATION
+-----------------
+
+Model:
+Random Forest Regressor
+
+Dataset:
+Desharnais Software Effort Estimation Dataset
+
+Historical Projects:
+81
+
+
+PROJECT INPUTS
+--------------
+
+Team Experience: {res['team_exp']}
+Manager Experience: {res['manager_exp']}
+Planned Duration: {res['duration_input']} months
+Transactions: {res['transactions']}
+Entities: {res['entities']}
+Adjustment Factor: {res['adjustment']}
+Language Category: {res['language']}
+Hourly Rate: Rs.{res['hourly_rate']}
+
+
+AI ESTIMATION
+-------------
+
+Estimated Effort:
+{res['hours']:.0f} hours
+
+Estimated Cost:
+Rs.{res['cost']:.0f}
+
+Estimated Duration:
+{res['months']:.1f} months
+
+
+ESTIMATED EFFORT RANGE
+----------------------
+
+{max(0, res['hours'] - res['uncertainty']):.0f}
+to
+{res['hours'] + res['uncertainty']:.0f} hours
+
+
+MODEL PERFORMANCE
+-----------------
+
+R² Score:
+0.5919
+
+MAE:
+1720.38 hours
+
+RMSE:
+2281.77 hours
+
+MMRE:
+0.7678
+
+MdMRE:
+0.2840
+
+PRED(25):
+35.29%
+
+
+FEATURE IMPORTANCE
+------------------
+
+Project Length:
+40.62%
+
+Transactions:
+22.13%
+
+Entities:
+17.03%
+
+Adjustment:
+12.63%
+
+Manager Experience:
+3.22%
+
+Language:
+2.46%
+
+Team Experience:
+1.91%
+
+
+AI EXPLANATION
+--------------
+
+The machine-learning model estimates project effort
+using historical software project characteristics.
+
+Project length, transaction volume, entity count and
+adjustment factor are the strongest contributors to
+the Random Forest prediction.
+
+Higher transaction and entity counts can indicate
+greater functional and data complexity.
+
+Team and manager experience can influence project
+productivity and execution.
+
+
+NOTE
+----
+
+The uncertainty range shown by the application is a
+heuristic estimate and is not a statistically calibrated
+confidence interval.
+
+Model evaluation metrics are based on a 20% held-out
+test set from the 81-project Desharnais dataset.
+"""
+
+
+    # =====================================================
+    # DOWNLOAD REPORT
+    # =====================================================
+
+    st.markdown("---")
+
+    st.subheader("⬇️ Download Report")
+
+    st.download_button(
+        label="📄 Download Report",
+        data=report_text,
+        file_name="AI_Cost_Estimation_Report.txt",
+        mime="text/plain",
+        use_container_width=True
+    )
+
+    st.info(
+        "The report contains the project inputs, AI estimate, "
+        "cost, duration, model performance and feature importance."
+    )
+
+
+    # =====================================================
+    # BACK
+    # =====================================================
+
+    if st.button(
+        "⬅️ Back to Results",
+        use_container_width=True
+    ):
+
+        st.session_state.page = "result"
+
+        st.rerun()
+
+
+# =========================================================
+# MAIN NAVIGATION
+# =========================================================
+
+if not st.session_state.logged_in:
+
+    if st.session_state.page == "auth":
+
+        auth_page()
+
+    elif st.session_state.page == "login":
+
+        login_page()
+
+    elif st.session_state.page == "signup":
+
+        signup_page()
 
     else:
 
-        sample_path = Path(__file__).parent / "sample_projects.csv"
+        st.session_state.page = "auth"
+        st.rerun()
 
-        if sample_path.exists():
+else:
 
-            sample = pd.read_csv(sample_path)
+    if st.session_state.page == "input":
 
-            st.info("Showing the included sample dataset.")
+        input_page()
 
-            st.dataframe(
-                sample.head(20),
-                use_container_width=True,
-                hide_index=True
-            )
+    elif st.session_state.page == "result":
 
-            st.download_button(
-                "Download sample CSV",
-                sample.to_csv(index=False).encode("utf-8"),
-                file_name="estimateai_sample_projects.csv",
-                mime="text/csv"
-            )
+        result_page()
 
-        else:
-            st.info(
-                "Upload your project CSV to explore its contents."
-            )
+    elif st.session_state.page == "graphs":
 
-        st.caption(
-            "Dataset exploration does not automatically train a model."
-        )
+        graph_page()
 
+    elif st.session_state.page == "report":
 
-# ==================================================
-# ABOUT
-# ==================================================
+        report_page()
 
-elif page == "About":
+    else:
 
-    st.markdown("### About EstiMateAi")
+        st.session_state.page = "input"
 
-    st.write(
-        "EstiMateAi is a project-planning prototype designed "
-        "to support early software project cost estimation."
-    )
-
-    st.markdown("""
-    **Tagline:** Estimate Smarter, Build Better.
-
-    **Problem:** Software estimates can miss personnel,
-    tooling and infrastructure expenses.
-
-    **Features:** Cost estimation, role-level effort breakdown,
-    cost visualization, scenario comparison and CSV exploration.
-
-    **Next step:** Connect a trained regression model using
-    validated historical project data.
-    """)
-
-    st.warning(
-        "The current estimator uses a demonstration formula, "
-        "not a trained AI model. Validate estimates against "
-        "real project records before relying on them."
-    )
-
-
-# ---------------- FOOTER ----------------
-
-st.divider()
-
-st.caption(
-    "EstiMateAi • Estimate Smarter, Build Better • "
-    "Prototype estimates are planning aids, not financial guarantees."
-)
